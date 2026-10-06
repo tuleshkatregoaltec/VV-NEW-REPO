@@ -1,0 +1,16 @@
+[Unit]
+Description=Repair one DXB Interact historical rental date
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/repos/vitevue-platform/holocron
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONPATH=/root/data/dxbi-rental-v2-experiments-20260905/code
+ExecStart=/root/repos/vitevue-platform/holocron/.venv/bin/python /root/data/dxbi-rental-repair-20260915/rental_repair_queue.py --plan /root/data/dxbi-rental-repair-20260915/repair-plan.json --state-dir /root/data/dxbi-rental-repair-20260915 --scraper /root/data/dxbi-rental-repair-20260915/dxbi_rental_backfill.py --credentials /root/.config/vitevue/dxbi/account-b.json --storage-state /root/.config/vitevue/dxbi/account-b-state.json --browser /root/.cache/ms-playwright/chromium-1217/chrome-linux64/chrome --manifest /root/data/dxbi-rental-v2-experiments-20260905/config/rental-profile-manifest.json
+TimeoutStartSec=45min
+TimeoutStopSec=45s
+KillMode=control-group
+Nice=10

@@ -1,0 +1,13 @@
+[Unit]
+Description=ViteVue daily DXBI sales report refresh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/repos/vitevue-platform
+ExecStart=/usr/local/sbin/dxbi-report-daily sales
+TimeoutStartSec=95min
+Nice=5
+

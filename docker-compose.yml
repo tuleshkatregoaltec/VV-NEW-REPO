@@ -1,0 +1,146 @@
+# Production stack for the ph-box.
+# Native Postgres and ClickHouse run on the host; this file manages the
+# services that run in Docker: backend API, auth, and Redis.
+#
+# Structural config is hardcoded here.
+# Secrets and external endpoints come from .env (pulled from Bitwarden).
+#
+# Deploy:       just deploy
+# First deploy: docker compose --profile init run --rm auth-db-init
+
+services:
+
+  backend:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    image: vitevue-platform-backend:local
+    ports:
+      - "8000:8000"
+    environment:
+      ENVIRONMENT: production
+      REDIS_URL: redis://redis:6379
+      AUTH_URL: http://auth:8081/auth/v1
+      # Override Bitwarden values that use Tailscale IPs — inside Docker use host-gateway
+      POSTGRES_URL: postgresql+asyncpg://vitevue:${POSTGRES_PASSWORD:-vitevue_dev}@host.docker.internal:5432/vitevue
+      CLICKHOUSE_HOST: host.docker.internal
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_DATABASE: vitevue
+      CLICKHOUSE_SECURE: "false"
+      OBJECT_STORAGE_PROVIDER: r2
+      OBJECT_STORAGE_REGION: auto
+      OBJECT_STORAGE_USE_PATH_STYLE: "true"
+      DEFAULT_CHAT_MODEL: google/gemini-3-flash-preview
+      POSTHOG_HOST: https://us.i.posthog.com
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+
+  auth:
+    image: ghcr.io/supabase/auth:v2.185.0
+    environment:
+      API_HOST: "0.0.0.0"
+      GOTRUE_DB_DRIVER: postgres
+      DB_NAMESPACE: auth
+      GOTRUE_SITE_URL: ${FRONTEND_URL}
+      GOTRUE_URI_ALLOW_LIST: ${FRONTEND_URL}
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_ADMIN_GROUP_NAME: admin
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: user
+      GOTRUE_JWT_ADMIN_ROLES: service_role,supabase_admin,admin
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "false"
+      GOTRUE_SMTP_PORT: "587"
+      GOTRUE_SMTP_SENDER_NAME: ViteVue
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /verify
+      GOTRUE_MAILER_URLPATHS_INVITE: /verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /verify
+    env_file:
+      - .env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "9999:8081"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8081/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "6379:6379"
+    volumes:
+      - /var/lib/vitevue/redis:/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # One-shot: initialises the auth schema in native Postgres.
+  # Run once on first deploy: docker compose --profile init run --rm auth-db-init
+  auth-db-init:
+    image: postgres:16-alpine
+    profiles:
+      - init
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      PGHOST: host.docker.internal
+      PGPORT: "5432"
+      PGDATABASE: vitevue
+      AUTH_DB_USER: supabase_auth_admin
+    env_file:
+      - .env
+    command:
+      - sh
+      - -lc
+      - |
+        set -euo pipefail
+        PGPASSWORD="$$POSTGRES_PASSWORD" psql -U "$$POSTGRES_USER" -v ON_ERROR_STOP=1 \
+          -v auth_user="$$AUTH_DB_USER" \
+          -v auth_pass="$$AUTH_DB_PASSWORD" \
+          <<'SQL'
+        DO $$$$
+        BEGIN
+          IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'postgres') THEN
+            CREATE ROLE postgres WITH LOGIN SUPERUSER;
+          END IF;
+        END $$$$;
+
+        SELECT format(
+          'create role %I login noinherit createrole noreplication password %L',
+          :'auth_user',
+          :'auth_pass'
+        )
+        WHERE NOT EXISTS (
+          SELECT 1 FROM pg_roles WHERE rolname = :'auth_user'
+        )\gexec
+
+        create schema if not exists auth authorization :"auth_user";
+        alter role :"auth_user" set search_path = 'auth';
+        SQL
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "1280"

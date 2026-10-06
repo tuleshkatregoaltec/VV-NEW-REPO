@@ -1,0 +1,36 @@
+# Python
+**/.venv
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+**/.pytest_cache
+**/.ruff_cache
+
+# Node
+**/node_modules
+**/.svelte-kit
+**/build
+**/.env
+
+# Git
+.git
+.gitignore
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Data
+data/
+holocron/
+*.csv
+
+# Logs
+*.log

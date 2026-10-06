@@ -1,0 +1,27 @@
+{
+  "roots": [
+    {
+      "name": "practice_sale",
+      "purpose": "sale",
+      "property_type": "property",
+      "path": "/for-sale/property/dubai/"
+    },
+    {
+      "name": "practice_rent",
+      "purpose": "rent",
+      "property_type": "property",
+      "path": "/to-rent/property/dubai/"
+    }
+  ],
+  "practice_pages_per_root": 3,
+  "resource_mode": "document",
+  "proxy": "residential",
+  "proxy_rotation": "context",
+  "pages_per_context": 1,
+  "identity_url": "https://api.ipify.org?format=json",
+  "expected_country": "",
+  "require_identity_success": true,
+  "max_attempts_per_page": 2,
+  "max_consecutive_failed_pages": 2,
+  "evidence": "challenge"
+}

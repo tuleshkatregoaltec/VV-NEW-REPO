@@ -1,0 +1,126 @@
+from __future__ import annotations
+
+from typing import Any
+
+from holocron.platform.bronze import (
+    coerce_boolish_uint8,
+    coerce_float,
+    coerce_int,
+    iso_datetime_or_default,
+)
+from holocron.platform.raw_files import string_value
+from holocron.sources.dld_open_data_bronze import (
+    build_open_data_bronze_loader,
+    dld_envelope_tuple,
+    dld_row_key,
+)
+
+_SOURCE_NAME = "dld_od_rents"
+_COLUMNS = (
+    "row_key",
+    "run_id",
+    "scraped_at",
+    "mode",
+    "date_window_start",
+    "date_window_end",
+    "page_index",
+    "row_index",
+    "contract_number",
+    "registration_date",
+    "start_date",
+    "end_date",
+    "property_id",
+    "land_property_id",
+    "ejari_property_type_id",
+    "ejari_property_sub_type_id",
+    "prop_type_en",
+    "prop_type_ar",
+    "prop_sub_type_en",
+    "prop_sub_type_ar",
+    "property_usage_id",
+    "usage_en",
+    "usage_ar",
+    "rooms",
+    "parking",
+    "actual_area",
+    "annual_amount",
+    "contract_amount",
+    "total_properties",
+    "version_number",
+    "version_en",
+    "version_ar",
+    "parcel_id",
+    "area_id",
+    "area_en",
+    "area_ar",
+    "project_en",
+    "project_ar",
+    "master_project_en",
+    "master_project_ar",
+    "is_free_hold",
+    "is_free_hold_en",
+    "is_free_hold_ar",
+    "nearest_metro_en",
+    "nearest_metro_ar",
+    "nearest_mall_en",
+    "nearest_mall_ar",
+    "nearest_landmark_en",
+    "nearest_landmark_ar",
+)
+
+
+def _row_tuple(raw_row: dict[str, Any], *, fallback_run_id: str) -> tuple:
+    row_key = dld_row_key(raw_row)
+    d = raw_row.get("raw") or {}
+    return (
+        *dld_envelope_tuple(raw_row, row_key=row_key, fallback_run_id=fallback_run_id),
+        string_value(d.get("CONTRACT_NUMBER")),
+        iso_datetime_or_default(d.get("REGISTRATION_DATE")),
+        iso_datetime_or_default(d.get("START_DATE")),
+        iso_datetime_or_default(d.get("END_DATE")),
+        coerce_int(d.get("PROPERTY_ID")),
+        coerce_int(d.get("LAND_PROPERTY_ID")),
+        coerce_int(d.get("EJARI_PROPERTY_TYPE_ID")),
+        coerce_int(d.get("EJARI_PROPERTY_SUB_TYPE_ID")),
+        string_value(d.get("PROP_TYPE_EN")),
+        string_value(d.get("PROP_TYPE_AR")),
+        string_value(d.get("PROP_SUB_TYPE_EN")),
+        string_value(d.get("PROP_SUB_TYPE_AR")),
+        coerce_int(d.get("PROPERTY_USAGE_ID")),
+        string_value(d.get("USAGE_EN")),
+        string_value(d.get("USAGE_AR")),
+        string_value(d.get("ROOMS")),
+        string_value(d.get("PARKING")),
+        coerce_float(d.get("ACTUAL_AREA")),
+        coerce_int(d.get("ANNUAL_AMOUNT")),
+        coerce_int(d.get("CONTRACT_AMOUNT")),
+        coerce_int(d.get("TOTAL_PROPERTIES")),
+        coerce_int(d.get("VERSION_NUMBER")),
+        string_value(d.get("VERSION_EN")),
+        string_value(d.get("VERSION_AR")),
+        string_value(d.get("PARCEL_ID")),
+        coerce_int(d.get("AREA_ID")),
+        string_value(d.get("AREA_EN")),
+        string_value(d.get("AREA_AR")),
+        string_value(d.get("PROJECT_EN")),
+        string_value(d.get("PROJECT_AR")),
+        string_value(d.get("MASTER_PROJECT_EN")),
+        string_value(d.get("MASTER_PROJECT_AR")),
+        coerce_boolish_uint8(d.get("IS_FREE_HOLD")),
+        string_value(d.get("IS_FREE_HOLD_EN")),
+        string_value(d.get("IS_FREE_HOLD_AR")),
+        string_value(d.get("NEAREST_METRO_EN")),
+        string_value(d.get("NEAREST_METRO_AR")),
+        string_value(d.get("NEAREST_MALL_EN")),
+        string_value(d.get("NEAREST_MALL_AR")),
+        string_value(d.get("NEAREST_LANDMARK_EN")),
+        string_value(d.get("NEAREST_LANDMARK_AR")),
+    )
+
+
+load_release_to_clickhouse = build_open_data_bronze_loader(
+    source_name=_SOURCE_NAME,
+    column_names=_COLUMNS,
+    row_builder=_row_tuple,
+    replace_date_column="start_date",
+)

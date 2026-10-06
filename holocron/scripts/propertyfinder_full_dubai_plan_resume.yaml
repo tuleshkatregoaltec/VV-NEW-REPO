@@ -1,0 +1,13 @@
+# Continuation of propertyfinder_full_dubai_plan.yaml after its first reset run.
+overrides:
+  categories: [1, 2, 3, 4]
+  location_ids: ["1"]
+  max_results_per_query: 750
+  max_planned_queries: 100000
+  max_plan_queries_per_run: 100
+  max_partition_depth: 10
+  fetch_details: false
+  request_pause_seconds: 1.0
+  timeout_seconds: 60
+  headless: true
+  block_media_requests: true

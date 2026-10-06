@@ -1,0 +1,10 @@
+# Current-listing collection after the matching full-Dubai plan has completed.
+overrides:
+  categories: [1, 2, 3, 4]
+  location_ids: ["1"]
+  max_search_pages_per_run: 100
+  fetch_details: false
+  request_pause_seconds: 1.0
+  timeout_seconds: 60
+  headless: true
+  block_media_requests: true

@@ -1,0 +1,85 @@
+set shell := ["bash", "-cu"]
+
+default:
+    @just --list
+
+sync:
+    uv sync --dev
+
+fmt:
+    uv run ruff format
+
+test:
+    uv run pytest
+
+typecheck:
+    uv run ty check --error-on-warning
+
+check:
+    uv run ruff format --check
+    uv run ruff check
+    uv run ty check --error-on-warning
+    uv run pytest
+
+replay-bronze target source +args='':
+    @case "{{target}}" in \
+      prod) just _compose prod run --build --rm --no-deps dagster-webserver python -m holocron.platform.bronze_replay {{source}} {{args}} ;; \
+      raw-test) just _compose raw-test run --build --rm --no-deps dagster-webserver python -m holocron.platform.bronze_replay {{source}} {{args}} ;; \
+      host) uv run python -m holocron.platform.bronze_replay {{source}} {{args}} ;; \
+      *) echo "Unknown replay target: {{target}}. Use prod, raw-test, or host." >&2; exit 2 ;; \
+    esac
+
+dataset-version target +args='':
+    @case "{{target}}" in \
+      prod) just _compose prod run --build --rm --no-deps dagster-webserver python -m holocron.platform.dataset_versions {{args}} ;; \
+      raw-test) just _compose raw-test run --build --rm --no-deps dagster-webserver python -m holocron.platform.dataset_versions {{args}} ;; \
+      host) uv run python -m holocron.platform.dataset_versions {{args}} ;; \
+      *) echo "Unknown dataset-version target: {{target}}. Use prod, raw-test, or host." >&2; exit 2 ;; \
+    esac
+
+env target="prod" +args='':
+    @case "{{target}}" in \
+      prod) bash scripts/pull-bitwarden-env.sh {{args}} ;; \
+      prod-manual) test -f .env || cp .env.example .env ;; \
+      raw-test) if [[ -n "$${BWS_ACCESS_TOKEN:-}" ]]; then bash scripts/pull-bitwarden-env.sh --env-file .env.raw-test --raw-only {{args}}; else test -f .env.raw-test || cp .env.raw-test.example .env.raw-test; fi ;; \
+      local) test -f .env.local || cp .env.local.example .env.local ;; \
+      *) echo "Unknown env target: {{target}}. Use prod, prod-manual, raw-test, or local." >&2; exit 2 ;; \
+    esac
+
+doctor target="prod" +args='':
+    @case "{{target}}" in \
+      prod) just _compose prod run --build --rm --no-deps dagster-webserver python -m holocron.platform.doctor --env-file /dev/null --check-connections {{args}} ;; \
+      raw-test) just _compose raw-test up -d postgres; just _compose raw-test run --build --rm --no-deps dagster-webserver python -m holocron.platform.doctor --env-file /dev/null --raw-only --check-connections {{args}} ;; \
+      host) command -v uv; command -v just; docker compose version ;; \
+      *) echo "Unknown doctor target: {{target}}. Use prod, raw-test, or host." >&2; exit 2 ;; \
+    esac
+
+up target="prod":
+    @case "{{target}}" in \
+      prod) just doctor prod; just _compose prod up -d --build ;; \
+      raw-test) just doctor raw-test; just _compose raw-test up -d --build ;; \
+      *) echo "Unknown up target: {{target}}. Use prod or raw-test." >&2; exit 2 ;; \
+    esac
+
+down target="prod":
+    @just _compose {{target}} down
+
+logs target="prod" service="dagster-webserver":
+    @just _compose {{target}} logs -f {{service}}
+
+ps target="prod":
+    @just _compose {{target}} ps
+
+admin:
+    uv run --extra admin streamlit run apps/entity_admin/app.py
+
+deploy:
+    git pull --ff-only
+    just up prod
+
+_compose target +args:
+    @case "{{target}}" in \
+      prod) ENV_FILE=.env docker compose {{args}} ;; \
+      raw-test) ENV_FILE=.env.raw-test docker compose -f docker-compose.yml -f docker-compose.raw-test.yml {{args}} ;; \
+      *) echo "Unknown compose target: {{target}}. Use prod or raw-test." >&2; exit 2 ;; \
+    esac

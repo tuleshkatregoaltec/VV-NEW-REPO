@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <key>Label</key>
+  <string>com.vitevue.dxbi-sync</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/Users/eier/VV/vitevue-platform-full-platform/holocron/.venv/bin/python</string>
+    <string>-m</string>
+    <string>holocron.platform.sync_market_data</string>
+    <string>--repo-dir</string>
+    <string>/Users/eier/VV/vitevue-platform-full-platform</string>
+    <string>--data-dir</string>
+    <string>/Users/eier/VV</string>
+  </array>
+  <key>WorkingDirectory</key>
+  <string>/Users/eier/VV/vitevue-platform-full-platform/holocron</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <key>PATH</key>
+    <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+  </dict>
+  <key>StartCalendarInterval</key>
+  <dict>
+    <key>Hour</key>
+    <integer>9</integer>
+    <key>Minute</key>
+    <integer>0</integer>
+  </dict>
+  <key>StandardOutPath</key>
+  <string>/Users/eier/VV/DXBI-Daily/sync.log</string>
+  <key>StandardErrorPath</key>
+  <string>/Users/eier/VV/DXBI-Daily/sync-error.log</string>
+</dict>
+</plist>

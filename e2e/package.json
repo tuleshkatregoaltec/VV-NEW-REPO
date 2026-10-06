@@ -1,0 +1,11 @@
+{
+  "name": "vitevue-e2e",
+  "private": true,
+  "scripts": {
+    "test": "playwright test --config playwright.config.ts",
+    "test:guards": "playwright test --config playwright.config.ts --project=mocked-guards guards"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.58.2"
+  }
+}

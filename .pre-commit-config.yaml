@@ -1,0 +1,23 @@
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: check-added-large-files
+      - id: check-merge-conflict
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: local
+    hooks:
+      - id: backend-ruff-check
+        name: backend lint
+        entry: just lint-backend
+        language: system
+        pass_filenames: false
+        files: ^backend/.*\.py$
+      - id: frontend-biome
+        name: frontend lint
+        entry: just lint-frontend
+        language: system
+        pass_filenames: false
+        files: ^frontend/.*\.(svelte|ts|js|json|css)$

@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule the ViteVue DXBI rental late-registration refresh weekly
+
+[Timer]
+OnCalendar=Sun *-*-* 02:00:00 UTC
+Persistent=true
+RandomizedDelaySec=10min
+Unit=dxbi-rentals-weekly.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule the ViteVue DXBI rental refresh daily
+
+[Timer]
+OnCalendar=*-*-* 00:30:00 UTC
+Persistent=true
+RandomizedDelaySec=5min
+Unit=dxbi-rentals-daily.service
+
+[Install]
+WantedBy=timers.target

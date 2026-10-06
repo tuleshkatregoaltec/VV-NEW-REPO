@@ -1,0 +1,55 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "holocron"
+version = "0.1.0"
+requires-python = ">=3.11"
+dependencies = [
+    "dagster>=1.13.3",
+    "dagster-webserver>=1.13.3",
+    "boto3>=1.43.5",
+    "clickhouse-connect>=0.15.1",
+    "pydantic-settings>=2.14.0",
+    "playwright>=1.59.0",
+    "2captcha-python>=2.0.6",
+    "psycopg[binary]>=3.3.4",
+    "dagster-postgres>=0.29.3",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=9.0.3",
+    "ruff>=0.15.12",
+    "ty>=0.0.35",
+]
+admin = [
+    "streamlit>=1.42.0",
+    "pyyaml>=6.0",
+    "python-dotenv>=1.0.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["holocron*"]
+
+[tool.setuptools.package-data]
+holocron = ["py.typed"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    "ignore:The 'u' type code is deprecated and will be removed in Python 3\\.16:DeprecationWarning",
+    "ignore:The `__fields__` attribute is deprecated, use the `model_fields` class property instead:pydantic.warnings.PydanticDeprecatedSince20:dagster_shared\\.dagster_model\\.pydantic_compat_layer",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "ruff>=0.15.12",
+    "ty>=0.0.35",
+]

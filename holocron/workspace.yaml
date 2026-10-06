@@ -1,0 +1,5 @@
+load_from:
+  - python_module:
+      module_name: holocron.definitions
+      working_directory: /app
+      location_name: holocron.definitions

@@ -1,0 +1,11 @@
+[Unit]
+Description=Resume the DXB Interact historical rental repair queue
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=1min
+AccuracySec=15s
+Unit=dxbi-rentals-repair.service
+
+[Install]
+WantedBy=timers.target

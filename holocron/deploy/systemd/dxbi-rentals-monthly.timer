@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule the ViteVue DXBI rental long-lag refresh monthly
+
+[Timer]
+OnCalendar=*-*-01 03:00:00 UTC
+Persistent=true
+RandomizedDelaySec=15min
+Unit=dxbi-rentals-monthly.service
+
+[Install]
+WantedBy=timers.target

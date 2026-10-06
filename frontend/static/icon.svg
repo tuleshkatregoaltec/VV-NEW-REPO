@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="500" height="450" viewBox="0 0 500 450">
+  <style>
+    .mark {
+      fill: #0b1b2b;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      .mark {
+        fill: #f6f1e7;
+      }
+    }
+  </style>
+  <polygon class="mark" points="22,25 241,425 290,339 112,25" />
+  <polygon class="mark" points="478,26 300,323 250,236 390,26" />
+</svg>

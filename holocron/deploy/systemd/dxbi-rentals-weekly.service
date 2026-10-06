@@ -1,0 +1,12 @@
+[Unit]
+Description=ViteVue weekly DXBI rental late-registration refresh
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/root/repos/vitevue-platform
+ExecStart=/usr/local/sbin/dxbi-report-daily rentals weekly
+TimeoutStartSec=40h
+Nice=5

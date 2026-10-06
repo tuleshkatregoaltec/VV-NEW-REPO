@@ -1,0 +1,34 @@
+services:
+  dagster-webserver:
+    depends_on:
+      dagster-daemon:
+        condition: service_started
+      postgres-dagster:
+        condition: service_healthy
+
+  dagster-daemon:
+    depends_on:
+      postgres-dagster:
+        condition: service_healthy
+
+  # Overrides the persistent postgres-dagster from the base compose with a
+  # transient instance for smoke-test runs.
+  postgres-dagster:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: dagster
+      POSTGRES_PASSWORD: dagster
+      POSTGRES_DB: dagster
+    ports:
+      - "${RAW_TEST_POSTGRES_PORT:-55432}:5432"
+    volumes:
+      - raw_test_postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dagster -d dagster"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    restart: "no"
+
+volumes:
+  raw_test_postgres_data:

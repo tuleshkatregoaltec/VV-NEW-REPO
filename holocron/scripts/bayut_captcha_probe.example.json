@@ -1,0 +1,83 @@
+{
+  "base_url": "https://www.bayut.com",
+  "search_paths": [
+    "/for-sale/property/dubai/",
+    "/to-rent/property/dubai/"
+  ],
+  "start_page": 1,
+  "max_pages_per_trial": 10,
+  "timeout_seconds": 60,
+  "settle_milliseconds": 750,
+  "headless": true,
+  "browser": "chromium",
+  "chrome_path": "",
+  "storage_state_path": "",
+  "identity_url": "https://REPLACE-WITH-INTERNAL-EGRESS-ENDPOINT.example/identity",
+  "expected_country": "AE",
+  "require_identity_success": true,
+  "correlation_header_name": "",
+  "evidence": "challenge",
+  "random_seed": 20260829,
+  "cohorts": [
+    {
+      "name": "direct_reuse_context",
+      "trials": 1,
+      "proxy": "direct",
+      "proxy_session_scope": "provider_default",
+      "isolation": "reuse_context",
+      "browser_state": "reset",
+      "identity_check_scope": "trial",
+      "pause_seconds": 3,
+      "jitter_seconds": 1,
+      "block_media_requests": true
+    },
+    {
+      "name": "residential_sticky_reuse_context",
+      "trials": 2,
+      "proxy": "residential",
+      "proxy_session_scope": "trial",
+      "isolation": "reuse_context",
+      "browser_state": "reset",
+      "identity_check_scope": "trial",
+      "pause_seconds": 3,
+      "jitter_seconds": 1,
+      "block_media_requests": true
+    },
+    {
+      "name": "residential_sticky_fresh_context",
+      "trials": 2,
+      "proxy": "residential",
+      "proxy_session_scope": "trial",
+      "isolation": "fresh_context",
+      "browser_state": "reset",
+      "identity_check_scope": "trial",
+      "pause_seconds": 3,
+      "jitter_seconds": 1,
+      "block_media_requests": true
+    },
+    {
+      "name": "residential_page_rotation_carry_state",
+      "trials": 2,
+      "proxy": "residential",
+      "proxy_session_scope": "page",
+      "isolation": "fresh_context",
+      "browser_state": "carry",
+      "identity_check_scope": "page",
+      "pause_seconds": 3,
+      "jitter_seconds": 1,
+      "block_media_requests": true
+    },
+    {
+      "name": "residential_page_rotation_fresh_state",
+      "trials": 2,
+      "proxy": "residential",
+      "proxy_session_scope": "page",
+      "isolation": "fresh_context",
+      "browser_state": "reset",
+      "identity_check_scope": "page",
+      "pause_seconds": 3,
+      "jitter_seconds": 1,
+      "block_media_requests": true
+    }
+  ]
+}

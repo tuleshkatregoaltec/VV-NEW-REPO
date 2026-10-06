@@ -1,0 +1,15 @@
+# Full current-listing discovery for Dubai: residential and commercial sale/rent.
+# This job is resumable through the pf_listings plan checkpoint in object storage.
+reset_checkpoint: true
+overrides:
+  categories: [1, 2, 3, 4]
+  location_ids: ["1"]
+  max_results_per_query: 750
+  max_planned_queries: 100000
+  max_plan_queries_per_run: 100
+  max_partition_depth: 10
+  fetch_details: false
+  request_pause_seconds: 1.0
+  timeout_seconds: 60
+  headless: true
+  block_media_requests: true

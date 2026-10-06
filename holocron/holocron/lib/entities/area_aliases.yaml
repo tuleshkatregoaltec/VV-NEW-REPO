@@ -1,0 +1,57 @@
+# Canonical area name aliases for Dubai real estate data.
+#
+# Keys are lowercase search terms (abbreviations, alternate spellings).
+# Values are the canonical DLD English area names used in silver tables.
+#
+# Used by the API layer to expand user search input — the silver tables
+# themselves already store canonical names from DLD.
+
+JVC: "Jumeirah Village Circle"
+jvc: "Jumeirah Village Circle"
+"jumeirah village circle": "Jumeirah Village Circle"
+
+JBR: "Jumeirah Beach Residence"
+jbr: "Jumeirah Beach Residence"
+"jumeirah beach residence": "Jumeirah Beach Residence"
+
+JLT: "Jumeirah Lakes Towers"
+jlt: "Jumeirah Lakes Towers"
+"jumeirah lake towers": "Jumeirah Lakes Towers"
+"jumeirah lakes towers": "Jumeirah Lakes Towers"
+
+downtown: "Downtown Dubai"
+"downtown dubai": "Downtown Dubai"
+
+"dubai marina": "Dubai Marina"
+
+DIFC: "Dubai International Financial Centre"
+difc: "Dubai International Financial Centre"
+"dubai international financial centre": "Dubai International Financial Centre"
+
+"palm jumeirah": "Palm Jumeirah"
+"the palm": "Palm Jumeirah"
+
+"business bay": "Business Bay"
+
+"al barsha": "Al Barsha"
+
+"arabian ranches": "Arabian Ranches"
+
+"dubai hills": "Dubai Hills Estate"
+"dubai hills estate": "Dubai Hills Estate"
+
+"city walk": "City Walk"
+citywalk: "City Walk"
+
+"la mer": "La Mer"
+
+"creek harbour": "Dubai Creek Harbour"
+"dubai creek harbour": "Dubai Creek Harbour"
+
+MBR: "Mohammad Bin Rashid City"
+"mbr city": "Mohammad Bin Rashid City"
+"mohammed bin rashid city": "Mohammad Bin Rashid City"
+"mohammad bin rashid city": "Mohammad Bin Rashid City"
+
+"meydan": "Meydan City"
+"meydan city": "Meydan City"

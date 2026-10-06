@@ -1,0 +1,5 @@
+from __future__ import annotations
+
+from holocron.sources.dld_open_data_shared import build_open_data_package_extractor
+
+extract_release = build_open_data_package_extractor(__package__)

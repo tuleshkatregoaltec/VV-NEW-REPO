@@ -1,0 +1,80 @@
+# Holocron VPS stack.
+# Dagster metadata lives in postgres-dagster (local Docker volume).
+# Durable state lives outside: ClickHouse on ph-box, object storage on R2.
+#
+# Structural config is hardcoded here.
+# Secrets and external endpoints come from .env (pulled from Bitwarden).
+#
+# Deploy: just deploy
+
+services:
+  dagster-webserver:
+    image: holocron:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: dagster-webserver -h 0.0.0.0 -p 3000 -w /app/workspace.yaml
+    ports:
+      - "${DAGSTER_PORT:-3000}:3000"
+    environment:
+      DAGSTER_HOME: /app
+      PYTHONUNBUFFERED: "1"
+      DAGSTER_POSTGRES_URL: postgresql://dagster:dagster@postgres-dagster:5432/dagster
+      OBJECT_STORAGE_PROVIDER: r2
+      OBJECT_STORAGE_REGION: auto
+      OBJECT_STORAGE_USE_PATH_STYLE: "true"
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_DATABASE: vitevue
+      CLICKHOUSE_SECURE: "false"
+      NEWS_THUMBNAIL_PREFIX: media/news/thumbnails
+    env_file:
+      - ${ENV_FILE:-.env}
+    restart: unless-stopped
+    depends_on:
+      dagster-daemon:
+        condition: service_started
+      postgres-dagster:
+        condition: service_healthy
+
+  dagster-daemon:
+    image: holocron:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: dagster-daemon run -w /app/workspace.yaml
+    environment:
+      DAGSTER_HOME: /app
+      PYTHONUNBUFFERED: "1"
+      DAGSTER_POSTGRES_URL: postgresql://dagster:dagster@postgres-dagster:5432/dagster
+      OBJECT_STORAGE_PROVIDER: r2
+      OBJECT_STORAGE_REGION: auto
+      OBJECT_STORAGE_USE_PATH_STYLE: "true"
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_DATABASE: vitevue
+      CLICKHOUSE_SECURE: "false"
+      NEWS_THUMBNAIL_PREFIX: media/news/thumbnails
+    env_file:
+      - ${ENV_FILE:-.env}
+    restart: unless-stopped
+    depends_on:
+      postgres-dagster:
+        condition: service_healthy
+
+  postgres-dagster:
+    image: postgres:16-alpine
+    container_name: holocron-postgres-dagster
+    environment:
+      POSTGRES_USER: dagster
+      POSTGRES_PASSWORD: dagster
+      POSTGRES_DB: dagster
+    volumes:
+      - postgres_dagster_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dagster -d dagster"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  postgres_dagster_data:

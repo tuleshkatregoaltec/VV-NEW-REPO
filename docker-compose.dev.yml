@@ -1,0 +1,307 @@
+# Local development stack.
+# Runs all platform and pipeline services on a single network.
+# Start with: just up
+
+services:
+
+  # ── Platform ────────────────────────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: dev-postgres
+    environment:
+      POSTGRES_USER: vitevue
+      POSTGRES_PASSWORD: vitevue_dev
+      POSTGRES_DB: vitevue
+    ports:
+      - "55432:5432"
+    volumes:
+      - dev-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vitevue"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  auth-db-init:
+    image: postgres:16-alpine
+    container_name: dev-auth-db-init
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      PGHOST: postgres
+      PGPORT: 5432
+      PGDATABASE: vitevue
+      PGUSER: vitevue
+      PGPASSWORD: vitevue_dev
+      AUTH_USER: supabase_auth_admin
+      AUTH_PASSWORD: supabase_auth_admin
+    command:
+      - sh
+      - -lc
+      - |
+        set -euo pipefail
+        psql -v ON_ERROR_STOP=1 \
+          -v auth_user="$$AUTH_USER" \
+          -v auth_pass="$$AUTH_PASSWORD" \
+          <<'SQL'
+        DO $$$$
+        BEGIN
+          IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = 'postgres') THEN
+            CREATE ROLE postgres WITH LOGIN SUPERUSER;
+          END IF;
+        END $$$$;
+
+        SELECT format(
+          'create role %I login noinherit createrole noreplication password %L',
+          :'auth_user',
+          :'auth_pass'
+        )
+        WHERE NOT EXISTS (
+          SELECT 1 FROM pg_roles WHERE rolname = :'auth_user'
+        )\gexec
+
+        create schema if not exists auth authorization :"auth_user";
+        alter role :"auth_user" set search_path = 'auth';
+        SQL
+
+  auth:
+    image: ghcr.io/supabase/auth:v2.185.0
+    container_name: dev-auth
+    restart: on-failure
+    depends_on:
+      auth-db-init:
+        condition: service_completed_successfully
+    environment:
+      API_HOST: 0.0.0.0
+      API_EXTERNAL_URL: http://localhost:9999
+      GOTRUE_DB_DRIVER: postgres
+      DB_NAMESPACE: auth
+      GOTRUE_DB_DATABASE_URL: postgres://supabase_auth_admin:supabase_auth_admin@postgres:5432/vitevue
+      GOTRUE_SITE_URL: http://localhost:5173
+      GOTRUE_URI_ALLOW_LIST: http://localhost:5173,http://localhost:3000,http://frontend:5173
+      GOTRUE_DISABLE_SIGNUP: "false"
+      GOTRUE_JWT_ADMIN_GROUP_NAME: admin
+      GOTRUE_JWT_DEFAULT_GROUP_NAME: user
+      GOTRUE_JWT_ADMIN_ROLES: service_role,supabase_admin,admin
+      GOTRUE_JWT_SECRET: super-secret-jwt-token-with-at-least-32-characters-long
+      GOTRUE_EXTERNAL_EMAIL_ENABLED: "true"
+      GOTRUE_MAILER_AUTOCONFIRM: "true"
+      GOTRUE_SMTP_ADMIN_EMAIL: admin@example.com
+      GOTRUE_SMTP_HOST: inbucket
+      GOTRUE_SMTP_PORT: 2500
+      GOTRUE_SMTP_SENDER_NAME: ViteVue
+      GOTRUE_MAILER_URLPATHS_CONFIRMATION: /verify
+      GOTRUE_MAILER_URLPATHS_INVITE: /verify
+      GOTRUE_MAILER_URLPATHS_RECOVERY: /verify
+      GOTRUE_MAILER_URLPATHS_EMAIL_CHANGE: /verify
+    ports:
+      - "9999:8081"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:8081/health"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  inbucket:
+    image: inbucket/inbucket:stable
+    container_name: dev-inbucket
+    ports:
+      - "2500:2500"
+      - "9000:9000"
+      - "1100:1100"
+    environment:
+      INBUCKET_SMTP_ADDR: 0.0.0.0:2500
+      INBUCKET_WEB_ADDR: 0.0.0.0:9000
+      INBUCKET_POP3_ADDR: 0.0.0.0:1100
+
+  redis:
+    image: redis:7-alpine
+    container_name: dev-redis
+    command: redis-server --requirepass vitevue_dev
+    ports:
+      - "6379:6379"
+    volumes:
+      - dev-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "vitevue_dev", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  # ── Shared data infrastructure ───────────────────────────────────────────────
+  # ClickHouse and MinIO are shared between the platform and the pipeline.
+
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: dev-clickhouse
+    restart: unless-stopped
+    environment:
+      CLICKHOUSE_DB: vitevue
+      CLICKHOUSE_USER: vitevue
+      CLICKHOUSE_PASSWORD: vitevue_dev
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: "1"
+    ports:
+      - "8123:8123"
+      - "9001:9000"
+    volumes:
+      - dev-clickhouse-data:/var/lib/clickhouse
+    ulimits:
+      nofile:
+        soft: 262144
+        hard: 262144
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8123/ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 30
+
+  clickhouse-init:
+    image: clickhouse/clickhouse-server:24.8
+    container_name: dev-clickhouse-init
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    volumes:
+      - ./holocron:/work
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        until clickhouse-client \
+          --host clickhouse \
+          --port 9000 \
+          --user vitevue \
+          --password vitevue_dev \
+          --database vitevue \
+          --query 'SELECT 1' >/dev/null 2>&1; do
+          echo 'waiting for ClickHouse to accept connections...';
+          sleep 2;
+        done
+        exec clickhouse-client \
+          --host clickhouse \
+          --port 9000 \
+          --user vitevue \
+          --password vitevue_dev \
+          --database vitevue \
+          --multiquery \
+          < /work/holocron/lib/sql/clickhouse_schema.sql
+    restart: "no"
+
+  # MinIO has been removed from the local dev stack because the public image
+  # registry version used by this repo is unavailable without registry auth.
+  # Keep the object-storage environment pointing at localhost:9002 for host-side
+  # app configs, but do not start a local MinIO container unless a public image
+  # becomes available again.
+
+  # ── Pipeline (Dagster / Holocron) ────────────────────────────────────────────
+
+  postgres-dagster:
+    image: postgres:16-alpine
+    container_name: dev-postgres-dagster
+    environment:
+      POSTGRES_USER: dagster
+      POSTGRES_PASSWORD: dagster
+      POSTGRES_DB: dagster
+    ports:
+      - "55433:5432"
+    volumes:
+      - dev-postgres-dagster-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dagster -d dagster"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  dagster-webserver:
+    image: holocron:dev
+    build:
+      context: ./holocron
+      dockerfile: Dockerfile
+    container_name: dev-dagster-webserver
+    command: uv run --locked --no-dev dagster-webserver -h 0.0.0.0 -p 3000 -w /app/workspace.yaml
+    ports:
+      - "${DAGSTER_PORT:-3000}:3000"
+    volumes:
+      - ./holocron:/app
+      - dev-dagster-webserver-venv:/app/.venv
+    environment:
+      DAGSTER_HOME: /app
+      PYTHONUNBUFFERED: "1"
+      DAGSTER_POSTGRES_URL: postgresql://dagster:dagster@postgres-dagster:5432/dagster
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_USER: vitevue
+      CLICKHOUSE_PASSWORD: vitevue_dev
+      CLICKHOUSE_DATABASE: vitevue
+      CLICKHOUSE_SECURE: "false"
+      OBJECT_STORAGE_PROVIDER: r2
+      OBJECT_STORAGE_ENDPOINT_URL: http://localhost:9002
+      OBJECT_STORAGE_ACCESS_KEY_ID: minioadmin
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
+      OBJECT_STORAGE_BUCKET: vitevue-etl
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_USE_PATH_STYLE: "true"
+    env_file:
+      - path: ./holocron/.env.local
+        required: false
+    depends_on:
+      dagster-daemon:
+        condition: service_started
+      postgres-dagster:
+        condition: service_healthy
+      clickhouse-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+  dagster-daemon:
+    image: holocron:dev
+    build:
+      context: ./holocron
+      dockerfile: Dockerfile
+    container_name: dev-dagster-daemon
+    command: uv run --locked --no-dev dagster-daemon run -w /app/workspace.yaml
+    volumes:
+      - ./holocron:/app
+      - dev-dagster-daemon-venv:/app/.venv
+    environment:
+      DAGSTER_HOME: /app
+      PYTHONUNBUFFERED: "1"
+      DAGSTER_POSTGRES_URL: postgresql://dagster:dagster@postgres-dagster:5432/dagster
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_PORT: "8123"
+      CLICKHOUSE_USER: vitevue
+      CLICKHOUSE_PASSWORD: vitevue_dev
+      CLICKHOUSE_DATABASE: vitevue
+      CLICKHOUSE_SECURE: "false"
+      OBJECT_STORAGE_PROVIDER: r2
+      OBJECT_STORAGE_ENDPOINT_URL: http://localhost:9002
+      OBJECT_STORAGE_ACCESS_KEY_ID: minioadmin
+      OBJECT_STORAGE_SECRET_ACCESS_KEY: minioadmin
+      OBJECT_STORAGE_BUCKET: vitevue-etl
+      OBJECT_STORAGE_REGION: us-east-1
+      OBJECT_STORAGE_USE_PATH_STYLE: "true"
+    env_file:
+      - path: ./holocron/.env.local
+        required: false
+    depends_on:
+      postgres-dagster:
+        condition: service_healthy
+      clickhouse-init:
+        condition: service_completed_successfully
+    restart: unless-stopped
+
+networks:
+  default:
+    driver: bridge
+    driver_opts:
+      com.docker.network.driver.mtu: "1280"
+
+volumes:
+  dev-postgres-data:
+  dev-redis-data:
+  dev-clickhouse-data:
+  dev-postgres-dagster-data:
+  dev-dagster-webserver-venv:
+  dev-dagster-daemon-venv:
