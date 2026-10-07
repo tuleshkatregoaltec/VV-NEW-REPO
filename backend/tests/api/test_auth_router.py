@@ -101,3 +101,69 @@ async def test_me_promotes_system_admin_role(api_client, monkeypatch):
     assert response.status_code == 200
     assert response.json()["role"] == "admin"
     assert response.json()["organization_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_frontend_login_returns_frontend_auth_shape(api_client, monkeypatch):
+    from app.auth import router
+
+    class FakeSession:
+        access_token = "assistant-access-token"
+        refresh_token = "assistant-refresh-token"
+        expires_in = 3600
+        expires_at = 1700000000
+        token_type = "bearer"
+        user = None
+
+        def model_dump(self, mode="python"):
+            return {
+                "access_token": self.access_token,
+                "refresh_token": self.refresh_token,
+                "expires_in": self.expires_in,
+                "expires_at": self.expires_at,
+                "token_type": self.token_type,
+                "user": self.user.model_dump(mode="python") if self.user else None,
+            }
+
+    class FakeUser:
+        id = "user-123"
+        email = "assistant@example.com"
+        user_metadata = {"first_name": "Assistant", "last_name": "User"}
+        avatar_url = None
+
+        def model_dump(self, mode="python"):
+            return {
+                "id": self.id,
+                "email": self.email,
+                "user_metadata": self.user_metadata,
+                "avatar_url": self.avatar_url,
+            }
+
+    fake_user = FakeUser()
+    fake_session = FakeSession()
+    fake_session.user = fake_user
+
+    class FakeAuthResponse:
+        user = fake_user
+        session = fake_session
+
+    async def fake_sign_in(credentials):
+        assert credentials["email"] == "assistant@example.com"
+        assert credentials["password"] == "secret-pass"
+        return FakeAuthResponse()
+
+    monkeypatch.setattr(router.auth_client, "sign_in_with_password", fake_sign_in)
+
+    response = await api_client.post(
+        "/api/v1/auth/login",
+        json={"email": "assistant@example.com", "password": "secret-pass"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert body["error"] is None
+    assert body["data"]["session"]["access_token"] == "assistant-access-token"
+    assert body["data"]["session"]["refresh_token"] == "assistant-refresh-token"
+    assert body["data"]["user"]["email"] == "assistant@example.com"
+

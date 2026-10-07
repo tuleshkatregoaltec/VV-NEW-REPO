@@ -1,8 +1,14 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from sqlmodel.ext.asyncio.session import AsyncSession
 
-from app.auth.models import AuthMeResponse, UpdateProfileRequest, UpdateProfileResponse
-from app.auth.service import update_user_profile_metadata
+from app.auth.models import (
+    AssistantLoginRequest,
+    AssistantLoginResponse,
+    AuthMeResponse,
+    UpdateProfileRequest,
+    UpdateProfileResponse,
+)
+from app.auth.service import auth_client, update_user_profile_metadata
 from app.core.dependencies import require_auth
 from app.organization import service as organization_service
 from app.postgres import get_db_session
@@ -65,6 +71,39 @@ async def get_user(
         role=role,
         is_owner=is_owner,
         subscription_status=subscription_status,
+    )
+
+
+@router.post("/login", response_model=AssistantLoginResponse)
+async def login_with_email_password(
+    request: AssistantLoginRequest,
+) -> AssistantLoginResponse:
+    """Mirror the frontend login flow exactly: sign in with email and password."""
+    try:
+        auth_response = await auth_client.sign_in_with_password(
+            {"email": request.email, "password": request.password}
+        )
+    except Exception as exc:  # pragma: no cover - depends on external auth provider
+        raise HTTPException(status_code=401, detail="Invalid email or password") from exc
+
+    if not auth_response or not auth_response.session or not auth_response.user:
+        raise HTTPException(status_code=401, detail="Authentication failed")
+
+    session = auth_response.session
+    user = auth_response.user
+    user_payload = user.model_dump(mode="json") if hasattr(user, "model_dump") else dict(user)
+    session_payload = (
+        session.model_dump(mode="json") if hasattr(session, "model_dump") else dict(session)
+    )
+    session_payload["user"] = user_payload
+
+    return AssistantLoginResponse(
+        success=True,
+        error=None,
+        data={
+            "user": user_payload,
+            "session": session_payload,
+        },
     )
 
 

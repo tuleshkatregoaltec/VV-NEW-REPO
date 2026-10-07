@@ -1,0 +1,63 @@
+# Remote data host setup for Vitevue
+# Use this when the other machine hosts Postgres, ClickHouse, Redis, Auth, and the restored data.
+
+# 1) On the other machine: find its LAN IP
+ipconfig getifaddr en0
+# or
+ifconfig en0
+
+# 2) On the other machine: open the handoff folder
+cd /Users/tk/Desktop/vitevue-full-development
+
+# 3) On the other machine: restore the handoff data
+uv run --project backend python /path/to/handoff/handoff.py restore --env-file .env.dev
+
+# 4) On the other machine: make sure Docker services are exposed on LAN
+# In the handoff compose file, change localhost bindings to 0.0.0.0
+# Example:
+# - "127.0.0.1:${HANDOFF_POSTGRES_PORT:-5432}:5432"
+# becomes
+# - "0.0.0.0:${HANDOFF_POSTGRES_PORT:-5432}:5432"
+# and similarly for ClickHouse, Redis, MinIO, Inbucket, Auth.
+
+# 5) On the other machine: restart the handoff stack
+cd /Users/tk/Desktop/vitevue-full-development
+docker compose up -d --force-recreate
+
+# 6) On the other machine: test ClickHouse from LAN
+curl "http://192.168.1.26:8123/?user=vitevue&password=vitevue_dev&database=vitevue"
+
+# 7) On the current machine: set remote env values
+# Edit your .env.dev or .env file with:
+# CLICKHOUSE_HOST=192.168.1.26
+# CLICKHOUSE_PORT=8123
+# CLICKHOUSE_USER=vitevue
+# CLICKHOUSE_PASSWORD=vitevue_dev
+# CLICKHOUSE_DATABASE=vitevue
+# CLICKHOUSE_SECURE=false
+#
+# POSTGRES_URL=postgresql+asyncpg://vitevue:vitevue_dev@192.168.1.26:5432/vitevue
+# REDIS_URL=redis://192.168.1.26:6379/0
+# AUTH_URL=http://192.168.1.26:9999
+
+# 8) On the current machine: start only the app processes
+cd /Users/tk/Desktop/VV-new
+just dev-backend
+just dev-frontend
+
+# OR run backend manually:
+cd /Users/tk/Desktop/VV-new/backend
+. .venv/bin/activate
+uvicorn app.main:app --reload
+
+# 9) Optional: test remote Postgres from the current machine
+psql "postgresql://vitevue:vitevue_dev@192.168.1.26:5432/vitevue"
+
+# 10) Optional: test remote ClickHouse client from the current machine
+clickhouse-client --host 192.168.1.26 --port 9001 --user vitevue --password vitevue_dev --database vitevue
+
+# Notes:
+# - The other machine must have Docker installed.
+# - Your current machine should not run the heavy backup restore again.
+# - The local path /Users/tk/Desktop/vitevue-full-development is only valid on the machine where it exists.
+# - Use the other machine's LAN IP instead of localhost.

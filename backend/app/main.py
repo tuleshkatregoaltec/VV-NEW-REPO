@@ -5,6 +5,7 @@ import logfire
 import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.openapi.utils import get_openapi
 from fastapi.routing import APIRoute
 from honeybadger import contrib, honeybadger
 from pydantic import BaseModel
@@ -53,12 +54,49 @@ async def lifespan(app: FastAPI):
     await close_postgres()
 
 
+# 2026-10-07: add Swagger/OpenAPI bearer auth metadata so frontend docs can send Authorization: Bearer <token>
+# Old app definition kept for reference:
+# app = FastAPI(
+#     title=settings.PROJECT_NAME,
+#     version="1.0.0",
+#     lifespan=lifespan,
+#     generate_unique_id_function=custom_generate_unique_id,
+# )
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version="1.0.0",
     lifespan=lifespan,
     generate_unique_id_function=custom_generate_unique_id,
 )
+
+
+def custom_openapi():
+    """Expose Swagger bearer auth so the frontend can authorize with a token."""
+    if app.openapi_schema:
+        return app.openapi_schema
+
+    openapi_schema = get_openapi(
+        title=app.title,
+        version=app.version,
+        routes=app.routes,
+    )
+
+    openapi_schema["components"] = openapi_schema.get("components", {})
+    openapi_schema["components"]["securitySchemes"] = {
+        "bearerAuth": {
+            "type": "http",
+            "scheme": "bearer",
+            "bearerFormat": "JWT",
+        }
+    }
+    openapi_schema["security"] = [{"bearerAuth": []}]
+
+    app.openapi_schema = openapi_schema
+    return app.openapi_schema
+
+
+app.openapi = custom_openapi
 logfire.instrument_fastapi(app)
 
 if settings.honeybadger_enabled:
