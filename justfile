@@ -23,13 +23,13 @@ ps:
 	docker compose -f docker-compose.dev.yml ps
 
 dev-backend:
-	set -a && source .env && set +a && cd backend && uv sync && scripts/lifecycle/prestart.sh && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+	set -a && source .env.dev && set +a && cd backend && uv sync && scripts/lifecycle/prestart.sh && uv run uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 
 dev-frontend:
-	set -a && source .env && set +a && cd frontend && bun install && bun run dev -- --host 0.0.0.0 --port 5173
+	set -a && source .env.dev && set +a && cd frontend && bun install && bun run dev -- --host 0.0.0.0 --port 5173
 
 dev-app:
-	set -a && source .env && set +a && \
+	set -a && source .env.dev && set +a && \
 		for port in 8000 5173; do \
 			pid=$(lsof -t -nP -iTCP:$port -sTCP:LISTEN 2>/dev/null | head -n 1); \
 			if [ -n "$pid" ]; then \

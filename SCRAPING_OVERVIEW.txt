@@ -1,0 +1,213 @@
+WEB SCRAPING IN VV-NEW PROJECT
+===============================
+
+TECH STACK
+----------
+
+- Scrapers are implemented in the separate `holocron/` Python package.
+- Dagster schedules and orchestrates the ingestion jobs.
+- Property Finder browser scraping uses Playwright with Chromium; HTTPX is used
+  for direct HTTP requests where a browser is not needed.
+- Raw releases are stored in R2-compatible object storage; normalized bronze
+  data is loaded into ClickHouse.
+- The Vitevue backend reads the resulting data; it does not run the scrapers.
+
+USE CASES
+---------
+
+1. PROPERTY LISTINGS
+   - Scrapes real estate listings from Property Finder (ph_box)
+   - Stores in ClickHouse as pf_listings_bronze table
+   - Includes: price, size, location, agent, broker, images, listing dates
+   - Each listing has scraped_at timestamp to track data freshness
+   - Used for property search, market analysis, benchmarking
+
+2. NEWS & MARKET INTELLIGENCE
+   - Imports news articles (scraped externally from news APIs)
+   - Stored in MinIO (object storage)
+   - Processed by AI to summarize market signals
+   - Two sections: macro (economy/rates) and real_estate (market/projects)
+   - Displayed on dashboard for market context
+
+3. AREA & COORDINATE DATA
+   - Imports geographic data and coordinates
+   - Example: Mashrooi coordinates for Dubai areas
+   - Used for location mapping and area analysis
+
+---
+
+WHERE SCRAPING HAPPENS
+----------------------
+
+REMOTE SCRAPE SERVER (Separate machine, accessed via Tailscale VPN)
+- Runs containerized scrapers
+- Ingests data from Property Finder, news APIs, etc.
+- Exports data to ClickHouse and MinIO
+- See: docs/new-mac-setup.md for Tailscale setup
+
+VV-NEW BACKEND (This repository)
+- Consumes scraped data from remote ClickHouse
+- Does NOT perform the actual scraping
+- Queries, transforms, and exposes data via APIs
+
+LOCAL DEVELOPMENT
+- Can import demo data using scripts
+- Uses local ClickHouse with pre-populated bronze tables
+
+---
+
+KEY FILE LOCATIONS
+------------------
+
+LISTINGS MODULE
+  backend/app/listings/service.py
+  - Queries pf_listings_bronze table
+  - Calculates market positions, pricing analytics
+  - Filters by price, size, location, property type
+
+  backend/app/listings/models.py
+  - Response models for listing cards, details, trends
+  - ListingCardResponse, ListingDetailResponse, etc.
+
+  backend/scripts/listings/import_pf_listings_demo.py
+  - Demo data import script
+  - Inserts sample listings into pf_listings_bronze
+  - Used for local development
+
+  backend/scripts/listings/export_pf_listings_csv.py
+  - Exports listings to CSV
+  - Fields: id, price, size, location, listed_date, scraped_at, etc.
+
+  backend/scripts/listings/select_pf_listing_snapshot.py
+  - Selects listings from a specific scrape date
+
+NEWS MODULE
+  backend/app/news/service.py
+  - Imports articles from S3
+  - Generates AI summaries using OpenRouter
+  - Stores summaries in PostgreSQL
+
+  backend/scripts/news/import_from_s3.py
+  - Imports news articles from MinIO/S3
+
+CLICKHOUSE UTILITIES
+  backend/scripts/clickhouse/create_compatibility_views.py
+  - Creates SQL views on scraped data
+  - Normalizes column names and formats
+  - Used by app to query scraped tables
+
+CONFIGURATION & SETUP
+  docs/new-mac-setup.md
+  - Setup instructions for scrape server access
+  - Tailscale VPN setup
+  - Data import workflow
+  - Scrape safety guidelines
+
+  remote-setup-commands.txt
+  - Commands for setting up remote data host
+  - How to restore and access remote databases
+
+---
+
+KEY TABLES & FIELDS
+-------------------
+
+CLICKHOUSE - pf_listings_bronze (Bronze/Raw Data)
+  - id (String): Unique listing ID
+  - raw_property_json (String): Full Property Finder JSON
+  - price_json (JSON): Price and period
+  - size_json (JSON): Property size
+  - bedrooms (String): Number of bedrooms
+  - listing_location_names_json (JSON): Area hierarchy
+  - listed_date (String): When property was listed
+  - scraped_at (String): When data was scraped (CRITICAL - snapshot timestamp)
+  - agent, broker, client (JSON): Party information
+  - images (Array): Property images
+
+POSTGRESQL - listings Table
+  - id (String): Reference to ph_box listing
+  - price_value, price_period: Normalized pricing
+  - size_value: Normalized property size
+  - bedrooms: Bedroom count
+  - property_type: Type of property
+  - listed_date: When listed
+  - scraped_at: Data snapshot timestamp
+
+---
+
+HOW IT WORKS - DATA FLOW
+------------------------
+
+1. REMOTE SCRAPE SERVER runs continuous jobs
+   - Scrapes Property Finder listing pages
+   - Fetches news from APIs
+   - Imports coordinates/area data
+
+2. SCRAPED DATA lands in remote ClickHouse
+   - Bronze tables (raw): pf_listings_bronze, etc.
+   - Timestamped with scraped_at field
+
+3. BACKEND QUERIES the remote ClickHouse
+   - Via POSTGRES_URL (if using PostgreSQL proxy)
+   - Or direct ClickHouse connection
+
+4. API RETURNS filtered/transformed listings
+   - POST /api/v1/listings/search
+   - GET /api/v1/listings/{id}
+
+5. FRONTEND DISPLAYS results
+   - Shows current listings
+   - Market analytics
+   - News summaries
+
+---
+
+IMPORTANT: scraped_at FIELD
+----------------------------
+
+The scraped_at timestamp is CRITICAL:
+- Marks when data was collected
+- Used to select specific scrape cohorts
+- Example: "get all listings scraped on 2026-10-08"
+- Data is a snapshot; price/availability changes are new scrapes
+- In demo imports: use --start-date flag to select cohort
+
+---
+
+SCRAPE SAFETY
+-------------
+
+Before accessing scrape server:
+- Check logs before changing running scrapers
+- Do not modify scraper config without approval
+- Only access via Tailscale VPN
+- See: docs/new-mac-setup.md "Scrape safety" section
+
+For production scrape checks, use:
+  tailscale ssh <scrape-vps-name> 'docker ps'
+
+---
+
+DEMO DATA WORKFLOW
+------------------
+
+To test locally without remote server:
+
+1. Restore demo data:
+   cd backend
+   uv run --project . python scripts/listings/import_pf_listings_demo.py
+
+2. Query ClickHouse:
+   clickhouse-client --host localhost --port 9000 \
+     --user default --database vitevue \
+     "SELECT COUNT(*) FROM pf_listings_bronze"
+
+3. Start backend:
+   just dev-backend
+
+4. Test listing endpoints:
+   POST http://localhost:8000/api/v1/listings/search
+
+---
+
+END OF OVERVIEW

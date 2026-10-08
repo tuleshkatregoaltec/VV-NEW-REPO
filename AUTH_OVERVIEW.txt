@@ -1,0 +1,28 @@
+DIRECT BACKEND LOGIN AND GLOBAL SWAGGER AUTH
+============================================
+
+TECH STACK
+----------
+
+- Backend auth: FastAPI route with the `supabase_auth` client for
+  email/password sign-in and session tokens.
+- Frontend auth: `@supabase/auth-js` for authentication client operations.
+- Direct API authorization: JWT access token sent as an HTTP bearer token;
+  Swagger UI uses the OpenAPI bearer security scheme.
+
+LOGIN API
+---------
+
+- Added `POST /api/v1/auth/login` in `backend/app/auth/router.py`.
+- It accepts an email and password, then returns the authentication session
+  and access token on successful sign-in.
+- Direct backend clients can use the access token in requests:
+  `Authorization: Bearer <access_token>`.
+
+GLOBAL OPENAPI BEARER AUTH
+-------------------------
+
+- Added `custom_openapi()` in `backend/app/main.py`.
+- It adds an HTTP bearer security scheme with `bearerFormat: JWT` to the
+  generated OpenAPI schema and applies it globally.
+- Swagger UI can use **Authorize** to send the bearer token with API requests.

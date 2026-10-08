@@ -1,0 +1,390 @@
+AI AGENTS IN VV-NEW PROJECT
+============================
+
+TECH STACK
+----------
+
+- Agents are implemented in Python with PydanticAI in the FastAPI backend.
+- OpenRouter provides the language model connection through the shared
+  `create_openrouter_model()` configuration.
+- Agents use typed, predefined tools to query ClickHouse and PostgreSQL; Redis
+  supports caching in parts of the application.
+- Backend endpoints stream agent responses to the SvelteKit frontend.
+- Feasibility changes are proposed as structured tool calls and require user
+  approval before they are applied to the workbook.
+
+USE CASES
+---------
+
+1. CHAT AGENT (Dubai Real Estate Market Analyst)
+   - Analyzes Dubai real estate market using transaction data
+   - Provides data-driven insights on market trends and performance
+   - Answers user queries about market conditions, area rankings, pricing
+   - Returns specific numbers, trends, and recommendations
+   - Powered by ClickHouse transaction data (pf_transactions)
+   - Conversational interface for real estate professionals
+   - Example: "Which area has highest appreciation?" → Agent queries ClickHouse and returns ranked areas
+
+2. FEASIBILITY CHAT AGENT (Workspace Development Assistant)
+   - Assists users during real estate development feasibility studies
+   - Real-time guidance on project assumptions and unit mixes
+   - Compares user's project against market comps and rental benchmarks
+   - Suggests pricing adjustments based on comparable projects
+   - Recommends unit mix changes based on market demand
+   - Evidence-based (low temperature 0.1) suggestions with market data backing
+   - Interactive: suggests changes, user approves/rejects before updating workbook
+   - Example: "Your unit mix has too many villas. Here are comparable projects with higher apartment %"
+
+3. HBU (HIGHEST & BEST USE) SEED AGENT (Feasibility Study Generator)
+   - Automatically generates initial feasibility studies for land plots
+   - Analyzes plot characteristics and local market conditions
+   - Seeds study with realistic assumptions based on market evidence
+   - Reduces manual data entry and research time
+   - Used when user uploads new plot or requests HBU analysis
+   - Outputs: unit mix, pricing strategy, rental positioning, land value estimate
+   - Example: User uploads plot in Al Barari → Agent generates complete study with market-driven assumptions
+
+---
+
+WHERE AGENTS ARE USED
+---------------------
+
+BACKEND CODE LOCATIONS
+
+Chat Agent (Market Analyzer)
+  backend/app/chat/agent.py
+  - Defines agent with OpenRouter model
+  - Tools: get_market_pulse(), rank_areas()
+  - Queries ClickHouse pf_transactions table
+  - Returns structured market insights
+
+  backend/app/chat/router.py
+  - Exposes agent via streaming endpoint
+  - POST /api/v1/chat/conversations/{id}/messages/stream
+  - Streaming response for real-time chat
+
+Feasibility Chat Agent (Development Assistant)
+  backend/app/feasibility/chat_agent.py
+  - Receives live workbook state as context each turn
+  - Low temperature (0.1) for factual suggestions
+  - Tools for research:
+    * get_area_market_data() - pricing by area and usage
+    * rank_pricing_comparables() - similar completed projects
+    * rank_pipeline_comparables() - competing supply
+    * get_plot_land_sales() - land valuation evidence
+    * show_transactions() / show_analytics() - UI triggers
+  - Tools for mutations (user-approved):
+    * update_prices() - adjust unit pricing
+    * update_unit_mix() - partial mix edits
+    * replace_unit_mix() - complete replacement
+
+  backend/app/feasibility/router.py
+  - Exposes agent via streaming endpoint
+  - POST /api/v1/feasibility/studies/{study_id}/chat
+  - Streaming response for real-time workspace assistance
+
+HBU Seed Agent (Study Generator)
+  backend/app/feasibility/hbu_agent.py
+  - Analyzes market data for given plot location
+  - Generates PlotResearch output with:
+    * Initial unit mix recommendation
+    * Pricing strategy by unit type
+    * Rental positioning
+    * Land value estimate
+  - Tools for research:
+    * get_existing_market_pricing() - secondary market floors
+    * get_off_plan_market_pricing() - off-plan by handover
+    * get_area_rental_market() - community rental data
+    * get_rental_comparables() - BTR comps with yields
+    * get_pricing_comparables() - sales/pricing evidence
+    * get_pipeline_comparables() - supply pipeline
+    * get_plot_land_sales() - land valuation evidence
+
+  backend/app/feasibility/router.py
+  - Exposes agent via endpoint
+  - POST /api/v1/feasibility/hbu/{plot_number}
+  - Returns generated feasibility study JSON
+
+FRONTEND INTEGRATION
+
+Chat Feature
+  frontend/src/routes/chat/
+  - Chat conversation UI
+  - Streams messages from Chat Agent
+  - Displays market insights and conversation history
+  - API calls to backend chat endpoint
+
+Feasibility Workbook
+  frontend/src/routes/feasibility/[id]/
+  - Live workbook state (unit prices, mix, assumptions)
+  - Feasibility Chat panel sends workbook context to agent
+  - Agent suggests changes via chat
+  - User accepts/rejects suggestions
+  - Updates reflected immediately in workbook
+
+HBU Analysis
+  frontend/src/routes/feasibility/hbu/
+  - Trigger HBU study generation for a plot
+  - Displays generated study results
+  - User can accept generated study or modify it
+  - Study becomes basis for feasibility workbook
+
+---
+
+KEY INTEGRATION POINTS
+----------------------
+
+DATA SOURCES FOR AGENTS
+
+ClickHouse (Analytics Database)
+  - pf_transactions: Transaction history, prices, areas, dates
+  - pf_listings_bronze: Listing data, property types, locations
+  - Custom views for market analysis
+
+PostgreSQL Database
+  - feasibility_studies: Saved studies and user workbooks
+  - projects: Completed and pipeline projects for comparables
+  - plot_data: Land plot characteristics and locations
+
+Redis Cache
+  - Recent agent responses cached for performance
+  - Market data aggregations for fast retrieval
+
+OpenRouter API
+  - LLM model for agent reasoning (claude-sonnet-5.5)
+  - Processes natural language queries and market data
+  - Streams responses back to frontend
+
+---
+
+AGENT TOOLS & CAPABILITIES
+---------------------------
+
+Chat Agent Tools
+
+1. get_market_pulse()
+   - Returns vital market statistics
+   - Current prices, sales volume, trends
+   - Last 30-90 days data
+   - Used to answer "how's the market?" queries
+
+2. rank_areas()
+   - Ranks Dubai areas by metric (appreciation, yield, demand)
+   - Returns top 10 areas with metrics
+   - Used to answer "best areas for investment?" queries
+
+Feasibility Chat Agent Tools
+
+1. Research Tools (Read-Only)
+   get_area_market_data(area, usage_type)
+   - Returns pricing by unit type and completion status
+   - Example: "Villa prices in Arabian Ranches: AED 3.2M-3.8M"
+
+   rank_pricing_comparables(area, usage_type, min_units)
+   - Returns completed comparable projects
+   - Sorted by relevance and recency
+   - Includes prices, unit mix, completion date
+
+   rank_pipeline_comparables(area, usage_type, handover_year)
+   - Returns competing pipeline supply
+   - Off-plan pricing, unit mix, handover timeline
+   - Identifies market saturation
+
+   get_plot_land_sales(area, plot_size_range)
+   - Returns recent land sales evidence
+   - Used to estimate plot value using comparable method
+
+   show_transactions() / show_analytics()
+   - Triggers UI panel display in frontend
+   - Allows agent to request detailed data visualization
+
+2. Mutation Tools (Require User Approval)
+   update_prices(unit_type, new_price, reason)
+   - Suggests price change with market evidence
+   - Example: "Increase villa price to AED 3.4M (top 20% comparable)"
+   - User must approve before applying
+
+   update_unit_mix(unit_type, new_count, reason)
+   - Suggests unit mix adjustment
+   - Example: "Increase apartments from 40 to 55 units (market demand)"
+
+   replace_unit_mix(new_mix, reasoning)
+   - Suggests complete unit mix replacement
+   - Based on comparable projects and market positioning
+
+HBU Seed Agent Tools
+
+1. get_existing_market_pricing(area)
+   - Secondary market floor prices
+   - Used to establish price range
+
+2. get_off_plan_market_pricing(area, handover_horizon)
+   - Off-plan pricing curves
+   - Pricing by handover timeline
+
+3. get_area_rental_market(area)
+   - Master community rental data
+   - Average rents by unit type
+
+4. get_rental_comparables(area, unit_type)
+   - BTR (Build-to-Rent) comparable yields
+   - Investment return benchmarks
+
+5. get_pricing_comparables(area, usage_type)
+   - Sales and pricing comps for value positioning
+
+6. get_pipeline_comparables(area, usage_type)
+   - Supply pipeline to assess market saturation
+
+7. get_plot_land_sales(area, plot_size)
+   - Land valuation evidence via comparable sales method
+
+---
+
+DATA FLOW ARCHITECTURE
+----------------------
+
+Chat Agent Flow
+1. User enters chat message in frontend
+2. Frontend sends message + conversation context to backend
+3. Backend Chat Agent receives message via OpenRouter
+4. Agent decides if tools are needed (get_market_pulse, rank_areas)
+5. Agent queries ClickHouse for data
+6. Agent processes results and generates response
+7. Backend streams response to frontend
+8. Frontend displays agent's market analysis
+
+Feasibility Chat Agent Flow
+1. User types in Feasibility Chat panel
+2. Frontend captures current workbook state (prices, mix, assumptions)
+3. Frontend sends message + workbook context to backend
+4. Backend Feasibility Agent receives message
+5. Agent analyzes workbook against market data
+6. Agent queries ClickHouse + PostgreSQL for comparables
+7. Agent generates suggestions using research tools
+8. Agent applies mutations to proposed workbook state (not live)
+9. Backend streams suggestions to frontend
+10. User reviews and approves/rejects each suggestion
+11. Approved changes update live workbook
+
+HBU Seed Agent Flow
+1. User clicks "Generate HBU Study" for a plot
+2. Frontend sends plot data to backend
+3. Backend HBU Agent analyzes plot location and characteristics
+4. Agent queries all market research tools for local market data
+5. Agent synthesizes data into PlotResearch object:
+   - Recommended unit mix (based on comparable projects)
+   - Pricing strategy (based on comparables and market position)
+   - Rental positioning (based on local market rents)
+   - Land value estimate (based on land sales comparables)
+6. Backend returns generated study to frontend
+7. Frontend displays generated study, user can accept or modify
+8. Study becomes basis for new feasibility workbook
+
+---
+
+CONFIGURATION & SETUP
+---------------------
+
+Agent Dependencies
+  pydantic-ai >= 0.1.0
+  openai >= 1.0.0 (for OpenRouter compatibility)
+  clickhouse-driver (for ClickHouse queries)
+
+Environment Variables (.env.dev)
+  OPENROUTER_API_KEY=sk-or-***
+  DEFAULT_CHAT_MODEL=anthropic/claude-sonnet-5.5
+  (Model can be switched; other claude/mixtral models supported)
+
+Agent Behavior Tuning
+  Temperature settings (0.0 = deterministic, 1.0 = creative):
+  - Chat Agent: 0.7 (balanced, conversational)
+  - Feasibility Agent: 0.1 (factual, evidence-based)
+  - HBU Agent: 0.3 (methodical, structured output)
+
+Model Selection
+  OpenRouter supports multiple models:
+  - claude-sonnet-5.5 (recommended, balanced)
+  - claude-opus-5 (larger context, slower)
+  - mixtral-8x22b (faster, slightly less accurate)
+  - Can swap models without code changes via .env.dev
+
+Performance Optimization
+  Redis caching for:
+  - Recent market data queries
+  - Generated feasibility studies (30-min cache)
+  - Area market summaries
+
+  ClickHouse native queries for:
+  - Aggregated statistics (faster than SQL)
+  - Transaction volume by area/type
+  - Price movements over time
+
+---
+
+USE CASE EXAMPLES
+-----------------
+
+Scenario 1: Market Research
+User: "Which areas have highest year-over-year appreciation?"
+→ Chat Agent queries ClickHouse transaction history
+→ Calculates YoY appreciation by area
+→ Returns: "1. Dubai Hills Estate (+8.2%), 2. Arabian Ranches (+7.5%)"
+
+Scenario 2: Feasibility Study Assistance
+User creates study for Al Barari plot
+→ User sets preliminary unit mix (50 villas, 100 apartments)
+→ User: "Does this unit mix make sense for this area?"
+→ Feasibility Agent queries comparable projects in Al Barari
+→ Agent finds 5 recent completions with 60% villas, 40% apartments
+→ Agent suggests: "Increase villas to 65, reduce apartments to 85 (aligns with completed comps)"
+→ User reviews and approves change
+→ Workbook updates in real-time
+
+Scenario 3: New Plot HBU Analysis
+User uploads new plot in Downtown Dubai
+→ User clicks "Generate HBU Study"
+→ HBU Agent queries market data:
+   - Downtown secondary market prices: AED 4.2M-5.8M (villas)
+   - Comparable completions: 70/30 villa-apt mix common
+   - Rental market: AED 180K-240K/year villa rents
+   - Land sales: AED 2500-3200/sqm in area
+→ Agent generates study:
+   - Unit mix: 75 villas, 150 apartments
+   - Villa pricing: AED 4.8M (75th percentile)
+   - Apartment pricing: AED 1.2M (median)
+   - Rental positioning: Target 7% villa gross yield
+   - Plot valuation: AED 2.9M (based on comparable land sales)
+→ User reviews generated study, accepts or modifies
+→ Study becomes workbook basis
+
+---
+
+KEY FILES REFERENCE
+-------------------
+
+Agent Implementation
+  backend/app/chat/agent.py - Chat market analyzer
+  backend/app/feasibility/chat_agent.py - Feasibility assistant
+  backend/app/feasibility/hbu_agent.py - HBU study generator
+
+Router/API Endpoints
+  backend/app/chat/router.py - Chat endpoints
+  backend/app/feasibility/router.py - Feasibility & HBU endpoints
+
+Data Access
+  backend/app/chat/queries.py - ClickHouse queries for Chat Agent
+  backend/app/feasibility/queries.py - Market data queries
+
+Frontend Integration
+  frontend/src/lib/api/chat.ts - Chat API wrapper
+  frontend/src/lib/api/feasibility.ts - Feasibility API wrapper
+  frontend/src/lib/queries/chatQueries.ts - TanStack Query keys
+  frontend/src/lib/queries/feasibilityQueries.ts - Study queries
+
+UI Components
+  frontend/src/routes/chat/ - Chat conversation page
+  frontend/src/routes/feasibility/[id]/ - Feasibility workbook
+  frontend/src/lib/components/FeasibilityChat.svelte - Chat widget
+
+---
